@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Accurate 10x10 Block Puzzle</title>
+<style>
+  /* Reset & base */
+  * {
+    box-sizing: border-box;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #4c6ef5, #dcb1ff, #ff758f, #ffba62);
+    background-size: 300% 300%;
+    animation: gradientShift 15s ease infinite;
+    color: #fff;
+  }
+  @keyframes gradientShift {
+    0% {background-position: 0% 50%;}
+    50% {background-position: 100% 50%;}
+    100% {background-position: 0% 50%;}
+  }
+  #container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 30px;
+    background: rgba(43, 46, 74, 0.85);
+    border-radius: 20px;
+    box-shadow: 0 0 25px rgba(255,255,255,0.3);
+  }
+  h1 {
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.6);
+  }
+  #game {
+    display: flex;
+    gap: 24px;
+    user-select: none;
+  }
+  /* Grid container */
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(10, 40px);
+    grid-template-rows: repeat(10, 40px);
+    gap: 4px;
+    background: #2b2e4a;
+    border: 4px solid #6b5b95;
+    border-radius: 16px;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+    position: relative;
+  }
+  /* Each cell */
+  .cell {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(145deg, #3e4162, #272a43);
+    border-radius: 8px;
+    box-shadow:
+      inset 2px 2px 5px #4a4d73,
+      inset -2px -2px 5px #22243a;
+    transition: background 0.25s, box-shadow 0.25s;
+  }
+  .cell.filled {
+    background: linear-gradient(145deg, #ff87a2, #ff5c79);
+    box-shadow:
+      0 0 10px 2px #ff5c79,
+      inset 1px 1px 5px #ff879c;
+  }
+  .cell.highlight {
+    background: linear-gradient(145deg, #a18fff, #7c61ff);
+    box-shadow:
+      0 0 15px 4px #a18fff,
+      inset 1px 1px 4px #7c61ff;
+  }
+
+  /* Blocks container */
+  #blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 140px;
+  }
+  /* Single block preview */
+  .block {
+    background: linear-gradient(145deg, #8e79ff, #6243ff);
+    border-radius: 16px;
+    padding: 8px;
+    box-shadow:
+      0 8px 20px rgba(147, 114, 255, 0.6),
+      inset 2px 2px 6px #a092ff;
+    cursor: grab;
+    user-select: none;
+    transition: box-shadow 0.3s;
+  }
+  .block:active {
+    cursor: grabbing;
+    box-shadow:
+      0 12px 24px rgba(147, 114, 255, 0.9),
+      inset 2px 2px 6px #a092ff;
+  }
+  /* Grid inside block */
+  .block-grid {
+    display: grid;
+    gap: 4px;
+    background: #4a3f96;
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow:
+      inset 2px 2px 6px rgba(255, 255, 255, 0.15),
+      inset -2px -2px 6px rgba(0, 0, 0, 0.5);
+  }
+  /* Each square inside block */
+  .block-cell {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(145deg, #e4dcff, #b1a6ff);
+    border-radius: 8px;
+    box-shadow:
+      inset 1px 1px 2px #fff,
+      inset -1px -1px 2px #8a86b5;
+  }
+  .block-cell.transparent {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Score and info */
+  #info {
+    margin-top: 28px;
+    font-size: 22px;
+    color: #f0e9ff;
+    text-shadow: 2px 2px 6px rgba(98, 55, 128, 0.7);
+    text-align: center;
+  }
+
+  /* Button for new game */
+  #newGameBtn {
+    margin-top: 25px;
+    padding: 10px 26px;
+    font-size: 18px;
+    border-radius: 18px;
+    border: none;
+    background: linear-gradient(145deg, #ff758f, #ffba62);
+    color: #4a2a20;
+    cursor: pointer;
+    box-shadow:
+      0 0 18px #ffba62,
+      inset 1px 1px 3px #ff936f;
+    transition: background 0.4s, color 0.4s;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #newGameBtn:hover {
+    background: linear-gradient(145deg, #ffba62, #ff758f);
+    color: #2a160f;
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <h1>10x10 Block Puzzle</h1>
+  <div id="game">
+    <div id="grid"></div>
+    <div id="blocks"></div>
+  </div>
+  <div id="info">Score: 0</div>
+  <button id="newGameBtn">New Game</button>
+</div>
+
+<script>
+  const ROWS = 10;
+  const COLS = 10;
+  const gridElement = document.getElementById('grid');
+  const blocksElement = document.getElementById('blocks');
+  const infoElement = document.getElementById('info');
+  const newGameBtn = document.getElementById('newGameBtn');
+
+  let score = 0;
+  let grid = [];
+  let blocks = [];
+
+  const BLOCK_SHAPES = [
+    [[1]],
+    [[1,1,1], [0,0,0], [0,0,0]],
+    [[1], [1], [1]],
+    [[1,1],
+     [1,1]],
+    [[1,0],
+     [1,0],
+     [1,1]],
+    [[0,1],
+     [0,1],
+     [1,1]],
+    [[1,1,1],
+     [0,1,0]],
+    [[1,1,0],
+     [0,1,1]],
+    [[0,1,1],
+     [1,1,0]]
+  ];
+
+  function initGrid() {
+    gridElement.innerHTML = '';
+    grid = [];
+    for(let r = 0; r < ROWS; r++) {
+      const row = [];
+      for(let c = 0; c < COLS; c++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+        gridElement.appendChild(cell);
+        row.push(false);
+      }
+      grid.push(row);
+    }
+  }
+
+  function generateBlocks() {
+    blocks = [];
+    blocksElement.innerHTML = '';
+    for(let i = 0; i < 3; i++) {
+      let shape = BLOCK_SHAPES[Math.floor(Math.random() * BLOCK_SHAPES.length)];
+      blocks.push(shape);
+      blocksElement.appendChild(createBlockElement(shape, i));
+    }
+  }
+
+  function createBlockElement(shape, index) {
+    const blockDiv = document.createElement('div');
+    blockDiv.classList.add('block');
+    blockDiv.draggable = true;
+    blockDiv.dataset.index = index;
+
+    const rows = shape.length;
+    const cols = shape[0].length;
+    const blockGrid = document.createElement('div');
+    blockGrid.classList.add('block-grid');
+    blockGrid.style.gridTemplateRows = `repeat(${rows}, 28px)`;
+    blockGrid.style.gridTemplateColumns = `repeat(${cols}, 28px)`;
+
+    for(let r = 0; r < rows; r++) {
+      for(let c = 0; c < cols; c++) {
+        const blockCell = document.createElement('div');
+        blockCell.classList.add('block-cell');
+        if(shape[r][c] === 0) blockCell.classList.add('transparent');
+        blockGrid.appendChild(blockCell);
+      }
+    }
+    blockDiv.appendChild(blockGrid);
+
+    blockDiv.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', index);
+      setTimeout(() => { blockDiv.style.display = 'none'; }, 0);
+    });
+
+    blockDiv.addEventListener('dragend', e => {
+      blockDiv.style.display = 'block';
+    });
+
+    return blockDiv;
+  }
+
+  function setupGridDrag() {
+    // Remove old event listeners to prevent duplicates
+    gridElement.removeEventListener('dragover', handleDragOver);
+    gridElement.removeEventListener('dragleave', handleDragLeave);
+    gridElement.removeEventListener('drop', handleDrop);
+
+    gridElement.addEventListener('dragover', handleDragOver);
+    gridElement.addEventListener('dragleave', handleDragLeave);
+    gridElement.addEventListener('drop', handleDrop);
+  }
+
+  function clearHighlights() {
+    gridElement.querySelectorAll('.cell.highlight').forEach(cell => {
+      cell.classList.remove('highlight');
+    });
+  }
+
+  function canPlaceBlock(shape, row, col) {
+    for(let r = 0; r < shape.length; r++) {
+      for(let c = 0; c < shape[0].length; c++) {
+        if(shape[r][c] === 1) {
+          let gridRow = row + r;
+          let gridCol = col + c;
+          if(gridRow >= ROWS || gridCol >= COLS || grid[gridRow][gridCol]) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  function placeBlock(shape, row, col) {
+    for(let r = 0; r < shape.length; r++) {
+      for(let c = 0; c < shape[0].length; c++) {
+        if(shape[r][c] === 1) {
+          let gridRow = row + r;
+          let gridCol = col + c;
+          grid[gridRow][gridCol] = true;
+          getGridCell(gridRow, gridCol).classList.add('filled');
+        }
+      }
+    }
+    updateScoreAndClear();
+  }
+
+  function getGridCell(row, col) {
+    return gridElement.querySelector(`.cell[data-row='${row}'][data-col='${col}']`);
+  }
+
+  function updateScoreAndClear() {
+    let clearedLines = 0;
+
+    for(let r=0; r<ROWS; r++) {
+      if(grid[r].every(Boolean)) {
+        clearedLines++;
+        for(let c=0; c<COLS; c++) {
+          grid[r][c] = false;
+          getGridCell(r,c).classList.remove('filled');
+        }
+      }
+    }
+
+    for(let c=0; c<COLS; c++) {
+      let fullColumn = true;
+      for(let r=0; r<ROWS; r++) {
+        if(!grid[r][c]) {
+          fullColumn = false;
+          break;
+        }
+      }
+      if(fullColumn) {
+        clearedLines++;
+        for(let r=0; r<ROWS; r++) {
+          grid[r][c] = false;
+          getGridCell(r,c).classList.remove('filled');
+        }
+      }
+    }
+
+    if(clearedLines > 0) {
+      score += clearedLines * 10;
+      updateScoreDisplay();
+    }
+    checkGameOver();
+  }
+
+  function updateScoreDisplay() {
+    infoElement.textContent = `Score: ${score}`;
+  }
+
+  function checkGameOver() {
+    if(blocks.length === 0) generateBlocks();
+    for(const shape of blocks) {
+      if(canPlaceAnyPosition(shape)) return;
+    }
+    alert(`Game Over! Your final score is ${score}. Click New Game to try again.`);
+    removeDragListeners();
+  }
+
+  function canPlaceAnyPosition(shape) {
+    for(let r=0; r<ROWS; r++) {
+      for(let c=0; c<COLS; c++) {
+        if(canPlaceBlock(shape, r, c)) return true;
+      }
+    }
+    return false;
+  }
+
+  function generateBlocksIfNeeded() {
+    if(blocks.length === 0) generateBlocks();
+    renderBlocks();
+  }
+
+  function renderBlocks() {
+    blocksElement.innerHTML = '';
+    blocks.forEach((shape, idx) => {
+      blocksElement.appendChild(createBlockElement(shape, idx));
+    });
+  }
+
+  function removeDragListeners() {
+    const blocksDivs = blocksElement.querySelectorAll('.block');
+    blocksDivs.forEach(b => {
+      b.draggable = false;
+      b.style.cursor = 'default';
+    });
+  }
+
+  // Improved drag-and-drop handlers on whole grid container
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    const index = e.dataTransfer.getData('text/plain');
+    if(!index) return;
+    const shape = blocks[index];
+
+    const rect = gridElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const cellSize = 44; // 40px cell + 4px gap
+
+    const col = Math.floor(x / cellSize);
+    const row = Math.floor(y / cellSize);
+
+    clearHighlights();
+
+    if(canPlaceBlock(shape, row, col)) {
+      highlightBlock(shape, row, col);
+    }
+  }
+
+  function handleDragLeave(e) {
+    clearHighlights();
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    const index = e.dataTransfer.getData('text/plain');
+    if(!index) return;
+    const shape = blocks[index];
+
+    const rect = gridElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const cellSize = 44;
+
+    const col = Math.floor(x / cellSize);
+    const row = Math.floor(y / cellSize);
+
+    clearHighlights();
+
+    if(canPlaceBlock(shape, row, col)) {
+      placeBlock(shape, row, col);
+      blocks.splice(index, 1);
+      generateBlocksIfNeeded();
+    }
+  }
+
+  // Highlight cells for a block at position
+  function highlightBlock(shape, row, col) {
+    for(let r = 0; r < shape.length; r++) {
+      for(let c = 0; c < shape[0].length; c++) {
+        if(shape[r][c] === 1) {
+          let gridRow = row + r;
+          let gridCol = col + c;
+          if(gridRow >= 0 && gridRow < ROWS && gridCol >= 0 && gridCol < COLS) {
+            const cell = getGridCell(gridRow, gridCol);
+            if(cell) cell.classList.add('highlight');
+          }
+        }
+      }
+    }
+  }
+
+
+  newGameBtn.addEventListener('click', () => {
+    score = 0;
+    updateScoreDisplay();
+    initGrid();
+    generateBlocks();
+    setupGridDrag();
+  });
+
+  // Initialize game when page loads
+  window.onload = () => {
+    score = 0;
+    updateScoreDisplay();
+    initGrid();
+    generateBlocks();
+    setupGridDrag();
+  }
+</script>
+</body>
+</html>
